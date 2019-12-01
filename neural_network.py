@@ -1,63 +1,89 @@
 import numpy as np
-from keras.utils import to_categorical
 from keras.models import Sequential
 from keras.layers import Dense, Conv2D, Flatten, MaxPooling2D
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.metrics import classification_report
+import tensorflow as tf
 from functions import *
 
 
 # Инициализируем данные и метки
 print("[INFO] Инициализируем данные и метки...")
-data = []
-labels = []
-EPOCHS = 20
-
-# Получаем случайный список изображений
-image_paths = get_all_letters_list()
-
-for image_path in image_paths:
-    # загружаем изображение, меняем размер на 32x32 пикселей (без учёта
-    # соотношения сторон), сглаживаем его в 32x32x3=3072 пикселей и
-    # добавляем в список
-    image = cv2.imread(image_path)
-    image = cv2.resize(image, (30, 30))  #  .flatten()
-    data.append(image)
-
-    # извлекаем метку класса из пути к изображению и обновляем
-    # список меток
-    label = image_path.split('/')[-2]
-    labels.append(label)
+data, labels = prepare_data_and_labels(WIDTH)
 
 
-# масштабируем интенсивности пикселей в диапазон [0, 1]
-data = np.array(data, dtype="float") / 255.0
-labels = np.array(labels)
-
-# разбиваем данные на обучающую и тестовую выборки, используя 75%
-# данных для обучения и оставшиеся 25% для тестирования
+# разбиваем данные на обучающую и тестовую выборки
 (trainX, testX, trainY, testY) = train_test_split(data,
-    labels, test_size=0.2, random_state=rand_seed)
+                                                  labels, test_size=0.2, random_state=RAND_SEED)
 
-print('trainX.shape ',trainX.shape)
-print('testX.shape ',testX.shape)
-print('trainY.shape ',trainY.shape)
-print('testY.shape ',testY.shape)
+print('trainX.shape=', trainX.shape)
+print('testX.shape=', testX.shape)
+print('trainY.shape=', trainY.shape)
+print('testY.shape=', testY.shape)
 
-# Трансформируем из двухмерного массива в трех мерный(28х28х1 канал)
-# trainX = trainX.reshape(1194,30,30,1)
-# testX = testX.reshape(398,30,30,1)
+# Трансформируем из двухмерного массива в трех мерный
+trainX = trainX.reshape(-1, WIDTH, WIDTH, 1)
+testX = testX.reshape(-1, WIDTH, WIDTH, 1)
 
 # конвертируем метки из целых чисел в векторы
 lb = LabelBinarizer()
 trainY = lb.fit_transform(trainY)
 testY = lb.transform(testY)
 
+
+# Определим функцию для выполнения между эпохами
+class CaptchaResolveCallback(tf.keras.callbacks.Callback):
+    def __init__(self, labelbinarizer):
+        self.lb = labelbinarizer
+
+    def prepare_captchas_and_labels(self):
+        # Убрать вывод ненужной информации
+        import os
+        import sys
+        f = open(os.devnull, 'w')
+        stdout_obj = sys.stdout
+        sys.stdout = f
+
+        data = []
+        labels = []
+
+        _, captchas = split_captcha_for_testing()
+        for captcha in captchas:
+            data.extend(get_letter_images_from_image(captcha))
+            labels.extend(captcha.split('/')[-1][:-4])
+
+        data = np.array(data, dtype="float") / 255.0
+        labels = np.array(labels)
+
+        sys.stdout = stdout_obj
+        return data, labels
+
+    def on_epoch_end(self, epoch, logs=None):
+        testX, labels = self.prepare_captchas_and_labels()
+        testX = testX.reshape(-1, WIDTH, WIDTH, 1)
+        predictions = self.model.predict(testX, batch_size=32)
+        out_labels = self.lb.inverse_transform(predictions)
+        count = 0
+        errors_count = 0
+        for i in range(0, len(out_labels), 5):
+            errors = 0
+            for j in range(5):
+                if out_labels[i + j] != labels[i + j]:
+                    errors += 1
+            errors_count += errors
+            if errors == 0:
+                count += 1
+        correct_count = len(out_labels) - errors_count
+        print(f'Правильно распознано {count} из {CAPTCHA_COUNT}. '
+              f'Кол-во правильных символов {correct_count} из {len(out_labels)}')
+        self.model.captcha_result = getattr(self.model, 'captcha_result', [])
+        self.model.captcha_result.append((epoch, count, correct_count, len(out_labels)))
+
 # определим архитектуру с помощью Keras
 model = Sequential()
 # Добавляем слой
-model.add(Conv2D(64, kernel_size=3, activation='relu', input_shape=(30, 30, 3)))
+model.add(Conv2D(64, kernel_size=3, activation='relu', input_shape=(WIDTH, WIDTH, 1)))
 model.add(MaxPooling2D(pool_size=(2, 2)))
 # Второй сверточный слой
 model.add(Conv2D(32, kernel_size=3, activation='relu'))
@@ -68,18 +94,22 @@ model.add(MaxPooling2D(pool_size=(2, 2)))
 # Создаем вектор для полносвязной сети.
 model.add(Flatten())
 # Создадим однослойный перцептрон
-model.add(Dense(20, activation='relu'))
+# model.add(Dense(100, activation='relu'))
 # Создадим однослойный перцептрон
-model.add(Dense(6, activation='softmax'))
+model.add(Dense(100, activation='sigmoid'))
+# Создадим однослойный перцептрон
+model.add(Dense(19, activation='softmax'))
 model.summary()
-model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+model.compile(
+    optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 results = model.fit(
-    trainX, trainY,
-    epochs=EPOCHS,
-    batch_size=32,
-    validation_data=(testX, testY)
+    trainX, trainY, epochs=EPOCHS, batch_size=32,
+    validation_data=(testX, testY),
+    callbacks=[CaptchaResolveCallback(lb)]
 )
-print("Test-Accuracy:", np.mean(results.history["val_accuracy"]))
+
+print_results_of_neural_network(model, results)
+model.save('output/my_model.h5')  # Создание HDF5 файла 'my_model.h5'
 
 # оцениваем нейросеть
 print("[INFO] evaluating network...")
@@ -88,15 +118,4 @@ print(classification_report(testY.argmax(axis=1),
                             predictions.argmax(axis=1), target_names=lb.classes_))
 
 # строим графики потерь и точности
-N = np.arange(0, EPOCHS)
-plt.style.use("ggplot")
-plt.figure()
-plt.plot(N, results.history["loss"], label="train_loss")
-plt.plot(N, results.history["val_loss"], label="val_loss")
-plt.plot(N, results.history["accuracy"], label="train_acc")
-plt.plot(N, results.history["val_accuracy"], label="val_acc")
-plt.title("Training Loss and Accuracy (Simple NN)")
-plt.xlabel("Epoch #")
-plt.ylabel("Loss/Accuracy")
-plt.legend()
-plt.savefig('figures/Figure Accuracy')
+draw_loss_figures(results, EPOCHS)
