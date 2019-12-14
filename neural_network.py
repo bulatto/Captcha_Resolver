@@ -10,12 +10,12 @@ from functions import *
 
 # Инициализируем данные и метки
 print("[INFO] Инициализируем данные и метки...")
-data, labels = prepare_data_and_labels(WIDTH)
-
+trainX, trainY = prepare_data_and_labels(WIDTH)
+testX, testY = prepare_data_and_labels(WIDTH, True)
 
 # разбиваем данные на обучающую и тестовую выборки
-(trainX, testX, trainY, testY) = train_test_split(data,
-                                                  labels, test_size=0.2, random_state=RAND_SEED)
+# (trainX, testX, trainY, testY) = train_test_split(
+#     data, labels, test_size=0.2, random_state=RAND_SEED)
 
 print('trainX.shape=', trainX.shape)
 print('testX.shape=', testX.shape)
@@ -94,9 +94,9 @@ model.add(MaxPooling2D(pool_size=(2, 2)))
 # Создаем вектор для полносвязной сети.
 model.add(Flatten())
 # Создадим однослойный перцептрон
-# model.add(Dense(100, activation='relu'))
+# model.add(Dense(500, activation='sigmoid'))
 # Создадим однослойный перцептрон
-model.add(Dense(100, activation='sigmoid'))
+model.add(Dense(500, activation='sigmoid'))
 # Создадим однослойный перцептрон
 model.add(Dense(19, activation='softmax'))
 model.summary()

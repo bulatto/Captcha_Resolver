@@ -232,8 +232,10 @@ def contour_processing(contrs, image):
     contrs = [c for c in contrs if 50 <= c[2] * c[3]]
     print(f'Удалено {len_before - len(contrs)} контуров  площадью меньше 50')
 
+    i = 0
     was_change = True
-    while was_change:
+    while was_change and i < 100:
+        i += 1
         contrs = sorted(contrs)
         was_change = contours_changing(contrs)
 
@@ -331,7 +333,7 @@ def draw_loss_figures(results, EPOCHS):
     if results.history.get('correct captha') and results.history.get('correct letters'):
         plt.plot(N, results.history['correct captha'], label='corr_captha')
         plt.plot(N, results.history['correct letters'], label='corr_let')
-    plt.title("Training Loss and Accuracy (Simple NN)")
+    plt.title("Training Loss and Accuracy")
     plt.xlabel("Epoch #")
     plt.ylabel("Loss/Accuracy")
     plt.legend()

@@ -50,7 +50,9 @@ def get_letter_images_from_image(img_path):
 
 
 # Сохранить все изображения букв в соответствующие папки
-def save_all_letters_to_dir(img_list):
+def save_all_letters_to_dir(img_list, test=False):
+    img_dir = 'test_letters' if test else 'letters'
+
     # Подтверждение
     inp = input('Действительно считать заново все буквы? '
                 'Текущие данные будут удалены. Нажмите ENTER или n\n')
@@ -60,9 +62,9 @@ def save_all_letters_to_dir(img_list):
 
     # Удаление текущих файлов
     try:
-        if 'letters' in os.listdir(os.getcwd()):
-            shutil.rmtree(os.path.abspath('letters/'))
-        os.mkdir('letters')
+        if img_dir in os.listdir(os.getcwd()):
+            shutil.rmtree(img_dir)
+        os.mkdir(img_dir)
     except:
         print('Произошла ошибка при удалении файлов!')
         return
@@ -74,8 +76,8 @@ def save_all_letters_to_dir(img_list):
         img_name = img[-9:-4]
         letters_images = get_letter_images_from_image(img)
         for i, letter in enumerate(img_name):
-            path = f'letters/{letter}/'
-            if letter not in os.listdir('letters/'):
+            path = f'{img_dir}/{letter}/'
+            if letter not in os.listdir(f'{img_dir}/'):
                 os.mkdir(path)
             cv2.imwrite(f'{path}{letter}{counter[letter]}.png', letters_images[i])
             counter[letter] += 1
@@ -84,11 +86,12 @@ def save_all_letters_to_dir(img_list):
 
 
 # Возвращает рандомный список всех букв из папки letters
-def get_all_letters_list():
-    letters = os.listdir(LETTERS_DIR)
+def get_all_letters_list(test=False):
+    img_dir = 'test_letters/' if test else LETTERS_DIR
+    letters = os.listdir(img_dir)
     letter_images_list = []
     for letter in letters:
-        current_dir = LETTERS_DIR + letter + '/'
+        current_dir = img_dir + letter + '/'
         files_in_dir = os.listdir(current_dir)
         images = list(filter(lambda f: f.endswith('.png'), files_in_dir))
         images = list(map(lambda x: current_dir + x, images))
@@ -100,12 +103,12 @@ def get_all_letters_list():
 
 
 # Подготовить входные данные и метки для нейросети
-def prepare_data_and_labels(width):
+def prepare_data_and_labels(width, test=False):
     data = []
     labels = []
 
     # Получаем список изображений
-    image_paths = get_all_letters_list()
+    image_paths = get_all_letters_list(test)
 
     for image_path in image_paths:
         # загружаем изображение, меняем размер на width x width пикселей (без учёта
