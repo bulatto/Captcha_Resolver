@@ -1,8 +1,4 @@
 .idea
 __pycache__/
 /venv
-/results
-/letters
-/captcha_dataset/
-/reserve/
-/test_letters/
+/OTHER/
