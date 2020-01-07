@@ -1,12 +1,9 @@
 # coding: utf-8
-
 import os
-import sys
 import shutil
 import random
 import cv2
 import numpy as np
-from matplotlib import pyplot as plt
 
 from image_processing import *
 from constants import *
@@ -23,7 +20,7 @@ def get_images_list():
     return images
 
 
-# Возвращает рандомный список капч и капч для тестирования (не включенных в 1 список)
+# Возвращает рандомный список капч и капч для тестирования
 def split_captcha_for_testing():
     main_list = get_images_list()
     if len(main_list) <= CAPTCHA_COUNT:
@@ -148,13 +145,15 @@ def letters_counter():
     print(counter)
 
 
+# Вывод результатов обучения нейронной сети
 def print_results_of_neural_network(model, results):
     print()
-    print(
-        f'Val_loss in different epochs={[(ep, round(value, 2)) for ep, value in enumerate(results.history["val_loss"])]}')
-    print(
-        f'Val_accuracy in different epochs={[(ep, round(value, 2)) for ep, value in enumerate(results.history["val_accuracy"])]}')
-    print("Mean Test-Accuracy:", np.mean(results.history["val_accuracy"]))
+    val_loss = [(ep, round(value, 2)) for ep, value in enumerate(results.history["val_loss"])]
+    print(f'Val_loss in different epochs={val_loss}')
+    val_acc = [(ep, round(value, 2)) for ep, value in enumerate(results.history["val_accuracy"])]
+    print(f'Val_accuracy in different epochs={val_acc}')
+    mean_acc = np.mean(results.history["val_accuracy"])
+    print("Mean Test-Accuracy:", mean_acc)
     captcha_recognition_result = [f"{x[0]}={x[1]}/{CAPTCHA_COUNT}, {x[2]}/{x[3]}" for x in model.captcha_result]
     print(f'Результат распознавания капч по эпохам: {captcha_recognition_result}')
     results.history['correct captha'] = [x[1] / CAPTCHA_COUNT for x in model.captcha_result]

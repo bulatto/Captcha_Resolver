@@ -1,4 +1,4 @@
-import numpy as np
+# coding: utf-8
 from keras.models import Sequential
 from keras.layers import Dense, Conv2D, Flatten, MaxPooling2D
 from sklearn.model_selection import train_test_split
@@ -31,8 +31,7 @@ lb = LabelBinarizer()
 trainY = lb.fit_transform(trainY)
 testY = lb.transform(testY)
 
-
-# Определим функцию для выполнения между эпохами
+# Определим функцию для выполнения между эпохами (для вывода информации о попытках распознавания реальной капчи)
 class CaptchaResolveCallback(tf.keras.callbacks.Callback):
     def __init__(self, labelbinarizer):
         self.lb = labelbinarizer
@@ -88,13 +87,8 @@ model.add(MaxPooling2D(pool_size=(2, 2)))
 # Второй сверточный слой
 model.add(Conv2D(32, kernel_size=3, activation='relu'))
 model.add(MaxPooling2D(pool_size=(2, 2)))
-# Третий сверточный слой
-model.add(Conv2D(16, kernel_size=3, activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
 # Создаем вектор для полносвязной сети.
 model.add(Flatten())
-# Создадим однослойный перцептрон
-# model.add(Dense(500, activation='sigmoid'))
 # Создадим однослойный перцептрон
 model.add(Dense(500, activation='sigmoid'))
 # Создадим однослойный перцептрон
@@ -109,10 +103,10 @@ results = model.fit(
 )
 
 print_results_of_neural_network(model, results)
-model.save('output/my_model.h5')  # Создание HDF5 файла 'my_model.h5'
+model.save('output/model.h5')  # Создание HDF5 файла 'my_model.h5'
 
 # оцениваем нейросеть
-print("[INFO] evaluating network...")
+print("[INFO] расчет нейронной сети...")
 predictions = model.predict(testX, batch_size=32)
 print(classification_report(testY.argmax(axis=1),
                             predictions.argmax(axis=1), target_names=lb.classes_))

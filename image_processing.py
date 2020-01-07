@@ -20,7 +20,7 @@ def plt_image(t, image):
     plt.show()
 
 
-# Вывод изображения в виде сетки
+# Вывод изображений в виде сетки m на n
 def plt_sub(m, n, img_list, titles_list=None):
     for i, img in enumerate(img_list):
         plt.subplot(m, n, i + 1)
@@ -29,6 +29,7 @@ def plt_sub(m, n, img_list, titles_list=None):
             plt.title(titles_list[i])
         else:
             plt.title(str(i + 1))
+    plt.gcf().canvas.set_window_title("Распознавание капчи")
     plt.show()
 
 
@@ -78,11 +79,10 @@ def calculate_vertical(img, x):
 
 # Обработка контуров
 def contour_processing(contrs, image):
-
+    # Разделение контура на несколько (если один контур частчино находится внутри другого)
     def split_in_contour(i, j):
         ix, iy, iw, ih = contrs[i]
         jx, jy, jw, jh = contrs[j]
-        # Разделение контура на несколько
         if (iw * ih - jw * jh) / 400 >= 1:
             print(f'Контур (jx={jx},jy={jy}) находится внутри (ix={ix},iy={iy})')
             lx, ly, lw, lh = ix, iy, jx - ix, ih
@@ -126,7 +126,7 @@ def contour_processing(contrs, image):
                 split_in_contour(i, j)
                 return True
 
-    # Соединение
+    # Соединение контуров
     def joining(i, j):
         ix, iy, iw, ih = contrs[i]
         jx, jy, jw, jh = contrs[j]
@@ -174,11 +174,11 @@ def contour_processing(contrs, image):
                 return True
         return False
 
-    # Разъединение контура
+    # Разъединение контура, если он слишком большой
     def separate(i):
         ix, iy, iw, ih = contrs[i]
         k = iw // 20
-        k = min(k, 5 + 1 - len(contrs))  # TODO: Добавлено, проверить
+        k = min(k, 5 + 1 - len(contrs))
         if k > 1:
             print(f'Разъединение контура (ix={ix},iy={iy}) на {k} частей...')
             if i == 0:
@@ -194,16 +194,6 @@ def contour_processing(contrs, image):
                 x_now += dx
             return True
         return False
-
-    def run_func_to_all_contrs(func):
-        length = len(contrs)
-        for i in range(length):
-            for j in range(i + 1, length):
-                # Если один контур внутри другого
-                change = func(i, j)
-                if change:
-                    return True
-        return
 
     # Выполнение соединения и разъединения контуров
     def contours_changing(contrs):
@@ -244,14 +234,14 @@ def contour_processing(contrs, image):
     contrs = [c for c in contrs if 100 <= c[2] * c[3]]
     print(f'Удалено {len_before - len(contrs)} контуров  площадью меньше 100')
 
-    # Если перебор букв
+    # Если букв больше 5, удаляем наименьшие контуры
     while len(contrs) > 5:
         sizes = [c[2] * c[3] for c in contrs]
         min_size = min(sizes)
         ind = [i for i, c in enumerate(contrs) if c[2] * c[3] == min_size][0]
         del contrs[ind]
 
-    # Если не хватает букв
+    # Если не хватает букв, делим наибольшие контуры
     while len(contrs) < 5:
         w = [c[2] for c in contrs]
         w_max_ind = [i for i, c in enumerate(contrs) if c[2] == max(w)][0]
@@ -262,7 +252,7 @@ def contour_processing(contrs, image):
         contrs[w_max_ind] = (zx, zy, dx, zh)
         contrs.append((zx + dx, zy, dx, zh))
 
-    # Если последний элемент маленький то соединяем и делим
+    # Если последний элемент маленький, то соединяем его с предыдущим и делим
     if contrs[-1][2] * contrs[-1][3] < 300:
         print('Последний элемент маленький,соединяем и делим')
         ix, iy, iw, ih = contrs[-2]
@@ -277,12 +267,14 @@ def contour_processing(contrs, image):
         dx = iw // 2
         contrs[-1] = (ix, iy, dx, ih)
         contrs.append((ix + dx, iy, dx, ih))
+
+    contrs = sorted(contrs)
     return contrs
 
 
 # Накладывание контуров на изображение
 def contours_to_image(image, contrs):
-    output = image.copy()
+    output = cv2.cvtColor(image.copy(),cv2.COLOR_GRAY2RGB)
     for i in contrs:
         x, y, w, h = i
         cv2.rectangle(output, (x, y), (x + w, y + h), (255, 0, 0), 1)
@@ -292,7 +284,7 @@ def contours_to_image(image, contrs):
 # Получение изображения со всеми контурами
 def get_image_with_all_contours(original, contours):
     """original - это исходная картинка в оттенках серого"""
-    temp = original.copy()
+    temp = cv2.cvtColor(original.copy(),cv2.COLOR_GRAY2RGB)
     for idx, contour in enumerate(contours):
         (x, y, w, h) = cv2.boundingRect(contour)
         cv2.rectangle(temp, (x, y), (x + w, y + h), (255, 0, 0), 1)
@@ -315,7 +307,7 @@ def get_countours(image, original, need_all_contrs=False):
 
     if need_all_contrs:
         # Получение изображения со всеми контурами
-        all_contrs = get_image_with_all_contours(original, contours)
+        all_contrs = get_image_with_all_contours(cv2.bitwise_not(image), contours)
         return contrs, all_contrs
     else:
         return contrs
@@ -323,28 +315,35 @@ def get_countours(image, original, need_all_contrs=False):
 
 # строим графики потерь и точности
 def draw_loss_figures(results, EPOCHS):
-    N = np.arange(0, EPOCHS)
+    N = np.arange(1, EPOCHS+1)
     plt.style.use("ggplot")
     plt.figure()
-    plt.plot(N, results.history["loss"], label="train_loss")
-    plt.plot(N, results.history["val_loss"], label="val_loss")
-    plt.plot(N, results.history["accuracy"], label="train_acc")
-    plt.plot(N, results.history["val_accuracy"], label="val_acc")
-    if results.history.get('correct captha') and results.history.get('correct letters'):
-        plt.plot(N, results.history['correct captha'], label='corr_captha')
-        plt.plot(N, results.history['correct letters'], label='corr_let')
-    plt.title("Training Loss and Accuracy")
-    plt.xlabel("Epoch #")
-    plt.ylabel("Loss/Accuracy")
+    plt.plot(N, results.history["loss"], label="Ошибки (тренир.)")
+    plt.plot(N, results.history["val_loss"], label="Ошибки (тест.)")
+    plt.plot(N, results.history["accuracy"], label="Точность (тренир.)")
+    plt.plot(N, results.history["val_accuracy"], label="Точность (тест.)")
+    plt.title("Точность и ошибки")
+    plt.xlabel("№ эпохи")
+    plt.ylabel("Ошибки / Точность")
     plt.legend()
-    plt.savefig('output/Figure Accuracy')
+    plt.savefig('output/Accuracy')
+
+    plt.figure()
+    if results.history.get('correct captha') and results.history.get('correct letters'):
+        plt.plot(N, results.history['correct captha'], label='Правильно распознанные капчи')
+        plt.plot(N, results.history['correct letters'], label='Правильно распознанные символы')
+    plt.title("Точность и ошибки")
+    plt.xlabel("№ эпохи")
+    plt.ylabel("Точность распознавания капчи")
+    plt.legend()
+    plt.savefig('output/Captcha Accuracy')
 
 
-def get_images_before_and_after_contouring(img_url):
+def get_images_before_and_after_contouring(img_url, response=''):
     img_c1 = cv2.imread(img_url, cv2.CV_8UC1)
     img_otsu = image_to_otsu(img_c1)
     contours, img_all_contrs = get_countours(img_otsu, img_c1, True)
     # Накладывание контуров на изображение
-    result = contours_to_image(img_c1, contours)
+    result = contours_to_image(img_otsu, contours)
     # Сравнение изображений
-    plt_sub(1, 3, [img_otsu, img_all_contrs, result], ['После обработки', 'Все контуры', 'Результат'])
+    plt_sub(2, 2, [img_c1, img_otsu, img_all_contrs, result], ['Исходное изображение', 'Изображение после обработки', 'Изображение со всеми контурами', f'Результат распознавания - {response}'])
